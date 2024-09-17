@@ -1,0 +1,1 @@
+The main idea here is to insert song slides with a specific format and it'll give you a knew slideshow with all the correct slides based on verse. This requires all of the powerpoint files to be of extension .pptx so I wrote a little script to convert .ppt files to .pptx first. This also requires a couple library dependencies located in the shell script.
