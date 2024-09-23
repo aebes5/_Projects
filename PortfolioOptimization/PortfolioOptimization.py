@@ -75,43 +75,55 @@ def getTickers():
 
 
 def optimize(expected_returns, cov_matrix):
-    model = pyo.ConcreteModel()
 
-    # decision variables
-    model.x1 = pyo.Var(domain = pyo.NonNegativeReals)
-    model.x2 = pyo.Var(domain = pyo.NonNegativeReals)
-    model.x3 = pyo.Var()
+    # build model
+    model = pyo.ConcreteModel()
+    tickers = expected_returns.index.tolist()
+
+    # vars
+    model.allocations = pyo.Var(tickers, domain = pyo.NonNegativeReals)
+    model.selected = pyo.Var(tickers, domain = pyo.Binary)
+
 
     # objective function
-    def obj_rule(model):
-        return 30*model.x1 - 100*model.x2 - 40*model.x3
-    model.obj = pyo.Objective(rule = obj_rule, sense = pyo.maximize)
+    def objRule(model):
+        return sum(expected_returns[ticker] * model.allocations[ticker] for ticker in tickers)
+    model.obj = pyo.Objective(rule = objRule, sense = pyo.maximize)
 
     # constraints
-    def rule_one(model):
-        return (3*model.x1 + 10*model.x2 + 5*model.x3) <= 40
-    model.rule_one_const = pyo.Constraint(rule = rule_one)
+    # decimals add up to 1 so we have a fractional breakdown
+    def sumRule(model):
+        return sum(model.allocations[ticker] for ticker in tickers) == 1
+    model.sum_const = pyo.Constraint(rule = sumRule)
 
-    def rule_one(model):
-        return (3*model.x1 + 10*model.x2 + 5*model.x3) <= 40
-    model.rule_one_const = pyo.Constraint(rule = rule_one)
+    # diversified portfolio, thus min of 25 stocks
+    def numberStocks(model):
+        return sum(model.selected[ticker] for ticker in tickers) >= 25
+    model.num_stocks_const = pyo.Constraint(rule = numberStocks)
 
-    def rule_one(model):
-        return (3*model.x1 + 10*model.x2 + 5*model.x3) <= 40
-    model.rule_one_const = pyo.Constraint(rule = rule_one)
+    # link vars
+    def selectionLinkRule(model, ticker):
+        return model.allocations[ticker] >= 0.01 * model.selected[ticker]
+    model.link_const = pyo.Constraint(tickers, rule = selectionLinkRule)    
+
+    # volatily < 0.005 -> stdev(0.05) = 7 % variance
+    def minVolatility(model):
+        return sum(model.allocations[i] * cov_matrix.loc[i, j] * model.allocations[j] for i
+                   in tickers for j in tickers) <= 0.005       
+    model.min_vol_const = pyo.Constraint(rule = minVolatility)
 
     # solution
-    result = pyo.SolverFactory("gurobi").solve(model, tee = True)
-
+    solver = pyo.SolverFactory("gurobi")
+    result = solver.solve(model, tee=True)
     print(f'The solver returned a status of: {result.solver.termination_condition}')
-
+    
     if result.solver.termination_condition == pyo.TerminationCondition.optimal:
-        print(pyo.TerminationCondition.optimal)
         print(f"Optimal value: {pyo.value(model.obj)}")
-        print("Optimal solution:")
-        print(f"  x1: {pyo.value(model.x1)}")
-        print(f"  x2: {pyo.value(model.x2)}")    
-        print(f"  x3: {pyo.value(model.x3)}")
+        print("Optimal allocations:")
+        for ticker in tickers:
+            if pyo.value(model.allocations[ticker]) > 0:
+                print(f"{ticker}: {pyo.value(model.allocations[ticker]):.4f}")
+
               
 
 main()
