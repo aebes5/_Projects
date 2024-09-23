@@ -111,6 +111,11 @@ def optimize(expected_returns, cov_matrix):
         return sum(model.allocations[i] * cov_matrix.loc[i, j] * model.allocations[j] for i
                    in tickers for j in tickers) <= 0.005       
     model.min_vol_const = pyo.Constraint(rule = minVolatility)
+    
+    # limit to 20% per stock
+    def maxAllocationRule(model, ticker):
+        return model.allocations[ticker] <= 0.20
+    model.max_alloc_const = pyo.Constraint(tickers, rule=maxAllocationRule)
 
     # solution
     solver = pyo.SolverFactory("gurobi")
